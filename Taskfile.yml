@@ -1,0 +1,25 @@
+version: '2'
+
+vars:
+  EXE: buildkite-stats{{exeExt}}
+
+tasks:
+  default:
+    cmds:
+      - task: run
+
+  run:
+    deps:
+      - build
+    cmds:
+      - ./{{.EXE}}
+
+  build:
+    sources:
+      - "*.go"
+    cmds:
+      - go build -v -o {{.EXE}}
+
+  clean:
+    cmds:
+      - rm -vf {{.EXE}}
