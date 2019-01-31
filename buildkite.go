@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
@@ -8,6 +9,40 @@ import (
 
 type Buildkite interface {
 	ListBuilds(from time.Time) ([]buildkite.Build, error)
+}
+
+type CachingBuildkite struct {
+	upstream Buildkite
+	duration time.Duration
+
+	cache []buildkite.Build
+	key   time.Time
+	m     sync.Mutex
+}
+
+func NewCachingBuildkite(b Buildkite, d time.Duration) *CachingBuildkite {
+	return &CachingBuildkite{
+		upstream: b,
+		duration: d,
+	}
+}
+
+func (b *CachingBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+
+	cacheKey := from.Truncate(5 * time.Minute)
+	if b.key == cacheKey {
+		return b.cache, nil
+	}
+
+	builds, err := b.upstream.ListBuilds(from)
+	if err == nil {
+		b.cache = builds
+		b.key = cacheKey
+	}
+	return builds, err
+
 }
 
 type NetworkBuildkite struct {

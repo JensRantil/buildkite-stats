@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
 	"github.com/go-chi/chi"
@@ -38,13 +39,13 @@ func main() {
 
 	client := buildkite.NewClient(config.Client())
 	client.UserAgent = "tink-buildkite-stats/v1.0.0"
-	bk := NetworkBuildkite{client, org, branch}
+	bk := NewCachingBuildkite(&NetworkBuildkite{client, org, branch}, 5*time.Minute)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.DefaultLogger)
-	r.Mount("/", (&Routes{&bk}).Routes())
+	r.Mount("/", (&Routes{bk}).Routes())
 
 	log.Printf("Listening on port %s", port)
 	server := http.Server{Addr: fmt.Sprintf(":%s", port), Handler: r}
