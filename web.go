@@ -114,7 +114,7 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `<h2>Average time spent building staging past 1 week</h2>`)
+	fmt.Fprintf(w, `<h2>Build times over time</h2>`)
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -135,7 +135,7 @@ func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(orderedList)
 
 	for _, pipeline := range orderedList {
-		fmt.Fprintf(w, `<h2>%s</h2><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
+		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
 	}
 }
 
