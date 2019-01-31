@@ -56,17 +56,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	sums := make(map[string]time.Duration)
 	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
 		name := *b.Pipeline.Name
-
-		var t time.Duration
-		for _, job := range b.Jobs {
-			if job.State == nil || *job.State != "passed" {
-				// A build also contains all jobs that aren't relevant for the
-				// branch. They don't contain a FinishedAt and StartedAt field.
-				continue
-			}
-			t += job.FinishedAt.Time.Sub(job.StartedAt.Time)
-		}
-		sums[name] += t
+		sums[name] += b.FinishedAt.Time.Sub(b.StartedAt.Time)
 		return nil
 	})
 
@@ -90,17 +80,7 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 	counts := make(map[string]int)
 	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
 		name := *b.Pipeline.Name
-
-		var t time.Duration
-		for _, job := range b.Jobs {
-			if job.State == nil || *job.State != "passed" {
-				// A build also contains all jobs that aren't relevant for the
-				// branch. They don't contain a FinishedAt and StartedAt field.
-				continue
-			}
-			t += job.FinishedAt.Time.Sub(job.StartedAt.Time)
-		}
-		sums[name] += t
+		sums[name] += b.FinishedAt.Time.Sub(b.StartedAt.Time)
 		counts[name] += 1
 		return nil
 	})
