@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
 	"github.com/go-chi/chi"
+	chart "github.com/wcharczuk/go-chart"
 )
 
 type Routes struct {
@@ -18,6 +21,7 @@ func (wr *Routes) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/", wr.root)
+	r.Get("/charts/{pipeline}", wr.charts)
 
 	return r
 }
@@ -33,6 +37,8 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
 
 	wr.totalTopList(w, r)
 	wr.averageTopList(w, r)
+
+	wr.printCharts(w, r)
 
 	fmt.Fprintf(w, `
 		</body>
@@ -96,6 +102,81 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `<tr><th>%s</th><td>%s</td></tr>`, pipeline.Name, pipeline.Duration.Truncate(time.Second))
 	}
 	fmt.Fprintf(w, `</table>`)
+}
+
+func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `<h2>Average time spent building staging past 1 week</h2>`)
+
+	activePipelines := make(map[string]struct{})
+	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
+		name := *b.Pipeline.Name
+		activePipelines[name] = struct{}{}
+		return nil
+	})
+
+	for pipeline, _ := range activePipelines {
+		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
+	}
+}
+
+type timelineDuration struct {
+	When     time.Time
+	Duration time.Duration
+}
+type timelineSlice []timelineDuration
+
+func (d timelineSlice) Len() int           { return len(d) }
+func (d timelineSlice) Less(i, j int) bool { return d[i].When.Before(d[j].When) }
+func (d timelineSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+
+func DurationValueFormatter(v interface{}) string {
+	return time.Duration(time.Duration(v.(float64)) * time.Second).Truncate(time.Second).String()
+}
+
+func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
+	pipeline := chi.URLParam(r, "pipeline")
+
+	items := make(timelineSlice, 0)
+	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
+		name := *b.Pipeline.Name
+		if name != pipeline {
+			return nil
+		}
+		items = append(items, timelineDuration{b.StartedAt.Time, b.FinishedAt.Time.Sub(b.StartedAt.Time)})
+		return nil
+	})
+	sort.Sort(items)
+
+	ts := chart.TimeSeries{
+		Style: chart.Style{
+			DotWidth: 5,
+			Show:     true,
+		},
+	}
+	for _, sample := range items {
+		ts.XValues = append(ts.XValues, sample.When)
+		ts.YValues = append(ts.YValues, sample.Duration.Seconds())
+	}
+
+	graph := chart.Chart{
+		XAxis: chart.XAxis{
+			Style: chart.StyleShow(),
+		},
+		Series: []chart.Series{ts},
+		Height: 350,
+		Width:  980,
+		YAxis: chart.YAxis{
+			Name:           "Seconds",
+			NameStyle:      chart.StyleShow(),
+			Style:          chart.StyleShow(),
+			ValueFormatter: DurationValueFormatter,
+		},
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	if err := graph.Render(chart.PNG, w); err != nil {
+		log.Println(err)
+	}
 }
 
 func nilToString(s *string) string {
