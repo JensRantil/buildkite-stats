@@ -128,8 +128,14 @@ func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
 		activePipelines[name] = struct{}{}
 	}
 
-	for pipeline, _ := range activePipelines {
-		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
+	orderedList := make([]string, 0)
+	for k, _ := range activePipelines {
+		orderedList = append(orderedList, k)
+	}
+	sort.Strings(orderedList)
+
+	for _, pipeline := range orderedList {
+		fmt.Fprintf(w, `<h2>%s</h2><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
 	}
 }
 
