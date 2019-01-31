@@ -6,13 +6,17 @@ import (
 	"github.com/buildkite/go-buildkite/buildkite"
 )
 
-type Buildkite struct {
+type Buildkite interface {
+	ListBuilds(from time.Time) ([]buildkite.Build, error)
+}
+
+type NetworkBuildkite struct {
 	Client *buildkite.Client
 	Org    string
 	Branch string
 }
 
-func (b *Buildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
+func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
 	opts := &buildkite.BuildsListOptions{
 		ListOptions: buildkite.ListOptions{
 			Page:    0,

@@ -13,7 +13,7 @@ import (
 )
 
 type Routes struct {
-	Buildkite *Buildkite
+	Buildkite Buildkite
 }
 
 func (wr *Routes) Routes() chi.Router {

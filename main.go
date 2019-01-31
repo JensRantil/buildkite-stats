@@ -38,7 +38,7 @@ func main() {
 
 	client := buildkite.NewClient(config.Client())
 	client.UserAgent = "tink-buildkite-stats/v1.0.0"
-	bk := Buildkite{client, org, branch}
+	bk := NetworkBuildkite{client, org, branch}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
