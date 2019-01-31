@@ -12,7 +12,7 @@ type Buildkite struct {
 	Branch string
 }
 
-func (b *Buildkite) ListBuilds(from time.Time, f func(buildkite.Build) error) error {
+func (b *Buildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
 	opts := &buildkite.BuildsListOptions{
 		ListOptions: buildkite.ListOptions{
 			Page:    0,
@@ -24,17 +24,13 @@ func (b *Buildkite) ListBuilds(from time.Time, f func(buildkite.Build) error) er
 	if b.Branch != "" {
 		opts.Branch = b.Branch
 	}
+	var result []buildkite.Build
 	for {
 		builds, resp, err := b.Client.Builds.ListByOrg(b.Org, opts)
 		if err != nil {
-			return err
+			return result, err
 		}
-
-		for _, build := range builds {
-			if err := f(build); err != nil {
-				return err
-			}
-		}
+		result = append(result, builds...)
 
 		if resp.NextPage <= 0 {
 			break
@@ -42,5 +38,5 @@ func (b *Buildkite) ListBuilds(from time.Time, f func(buildkite.Build) error) er
 		opts.ListOptions.Page = resp.NextPage
 	}
 
-	return nil
+	return result, nil
 }

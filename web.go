@@ -8,7 +8,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/buildkite/go-buildkite/buildkite"
 	"github.com/go-chi/chi"
 	chart "github.com/wcharczuk/go-chart"
 )
@@ -59,12 +58,17 @@ func (d durationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<h2>Total time spent building staging past 1 week</h2>`)
 
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	if err != nil {
+		// TODO: Return error.
+		return
+	}
+
 	sums := make(map[string]time.Duration)
-	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
+	for _, b := range builds {
 		name := *b.Pipeline.Name
 		sums[name] += b.FinishedAt.Time.Sub(b.StartedAt.Time)
-		return nil
-	})
+	}
 
 	sumsList := make(durationSlice, 0, len(sums))
 	for k, v := range sums {
@@ -82,14 +86,19 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<h2>Average time spent building staging past 1 week</h2>`)
 
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	if err != nil {
+		// TODO: Return error.
+		return
+	}
+
 	sums := make(map[string]time.Duration)
 	counts := make(map[string]int)
-	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
+	for _, b := range builds {
 		name := *b.Pipeline.Name
 		sums[name] += b.FinishedAt.Time.Sub(b.StartedAt.Time)
 		counts[name] += 1
-		return nil
-	})
+	}
 
 	sumsList := make(durationSlice, 0, len(sums))
 	for k, v := range sums {
@@ -107,12 +116,17 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<h2>Average time spent building staging past 1 week</h2>`)
 
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	if err != nil {
+		// TODO: Return error.
+		return
+	}
+
 	activePipelines := make(map[string]struct{})
-	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
+	for _, b := range builds {
 		name := *b.Pipeline.Name
 		activePipelines[name] = struct{}{}
-		return nil
-	})
+	}
 
 	for pipeline, _ := range activePipelines {
 		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
@@ -136,15 +150,20 @@ func DurationValueFormatter(v interface{}) string {
 func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	pipeline := chi.URLParam(r, "pipeline")
 
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	if err != nil {
+		// TODO: Return error.
+		return
+	}
+
 	items := make(timelineSlice, 0)
-	wr.Buildkite.ListBuilds(fromTime(r), func(b buildkite.Build) error {
+	for _, b := range builds {
 		name := *b.Pipeline.Name
 		if name != pipeline {
-			return nil
+			continue
 		}
 		items = append(items, timelineDuration{b.StartedAt.Time, b.FinishedAt.Time.Sub(b.StartedAt.Time)})
-		return nil
-	})
+	}
 	sort.Sort(items)
 
 	ts := chart.TimeSeries{
