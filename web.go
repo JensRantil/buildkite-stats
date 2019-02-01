@@ -198,6 +198,10 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 			NameStyle:      chart.StyleShow(),
 			Style:          chart.StyleShow(),
 			ValueFormatter: DurationValueFormatter,
+			Range: &chart.ContinuousRange{
+				Min: 0,
+				Max: max(ts.YValues),
+			},
 		},
 	}
 
@@ -205,6 +209,16 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	if err := graph.Render(chart.PNG, w); err != nil {
 		log.Println(err)
 	}
+}
+
+func max(a []float64) float64 {
+	var v float64
+	for _, e := range a {
+		if e > v {
+			v = e
+		}
+	}
+	return v
 }
 
 func nilToString(s *string) string {
