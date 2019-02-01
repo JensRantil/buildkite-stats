@@ -56,7 +56,7 @@ func (d durationSlice) Less(i, j int) bool { return d[i].Duration < d[j].Duratio
 func (d durationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 
 func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `<h2>Total time spent building staging past 1 week</h2>`)
+	fmt.Fprintf(w, `<h2>Total time spent building staging past 4 weeks</h2>`)
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -84,7 +84,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `<h2>Average time spent building staging past 1 week</h2>`)
+	fmt.Fprintf(w, `<h2>Average time spent building staging past 4 weeks</h2>`)
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -212,5 +212,5 @@ func nilToString(s *string) string {
 }
 
 func fromTime(w *http.Request) time.Time {
-	return time.Now().Add(-24 * 7 * time.Hour)
+	return time.Now().Add(-24 * 28 * time.Hour)
 }
