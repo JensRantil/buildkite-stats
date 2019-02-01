@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -35,7 +36,7 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
 		<h1>Buildkite Dashboard</h1>`)
 
 	wr.totalTopList(w, r)
-	wr.averageTopList(w, r)
+	wr.percentileTopList(w, r, 90)
 
 	wr.printCharts(w, r)
 
@@ -83,8 +84,9 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `</table>`)
 }
 
-func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `<h2>Average time spent building staging past 4 weeks</h2>`)
+func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc int) {
+	fmt.Fprintf(w, `<h2>%dth percentile of time spent building staging past 4 weeks</h2>`, perc)
+	fperc := float64(perc) / 100
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -92,25 +94,41 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sums := make(map[string]time.Duration)
-	counts := make(map[string]int)
+	durationsByPipeline := make(map[string][]time.Duration)
 	for _, b := range builds {
 		name := *b.Pipeline.Name
-		sums[name] += b.FinishedAt.Time.Sub(b.StartedAt.Time)
-		counts[name] += 1
+		durationsByPipeline[name] = append(durationsByPipeline[name], b.FinishedAt.Time.Sub(b.StartedAt.Time))
 	}
 
-	sumsList := make(namedDurationSlice, 0, len(sums))
-	for k, v := range sums {
-		sumsList = append(sumsList, namedDuration{k, v / time.Duration(counts[k])})
+	sumsList := make(namedDurationSlice, 0, len(durationsByPipeline))
+	for k, v := range durationsByPipeline {
+		sumsList = append(sumsList, namedDuration{k, durationPercentile(v, fperc)})
 	}
 	sort.Sort(sort.Reverse(sumsList))
 
-	fmt.Fprintf(w, `<table><tr><th>Pipeline</th><th>Average Duration</th></tr>`)
+	fmt.Fprintf(w, `<table><tr><th>Pipeline</th><th>%dth percentile</th></tr>`, perc)
 	for _, pipeline := range sumsList {
 		fmt.Fprintf(w, `<tr><th>%s</th><td>%s</td></tr>`, pipeline.Name, pipeline.Duration.Truncate(time.Second))
 	}
 	fmt.Fprintf(w, `</table>`)
+}
+
+type durationSlice []time.Duration
+
+func (d durationSlice) Len() int           { return len(d) }
+func (d durationSlice) Less(i, j int) bool { return d[i] < d[j] }
+func (d durationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+
+func durationPercentile(a []time.Duration, perc float64) time.Duration {
+	sorted := durationSlice(a)
+	if !sort.IsSorted(sorted) {
+		// Copy to avoid side-effects.
+		sorted = durationSlice(append([]time.Duration(nil), a...))
+		sort.Sort(sorted)
+	}
+
+	element := int(math.Round(float64(len(a)-1) * perc))
+	return sorted[element]
 }
 
 func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
