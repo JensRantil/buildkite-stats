@@ -174,7 +174,7 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 
 	ts := chart.TimeSeries{
 		Style: chart.Style{
-			DotWidth: 5,
+			DotWidth: 3,
 			Show:     true,
 		},
 	}
