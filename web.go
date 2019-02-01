@@ -49,11 +49,11 @@ type namedDuration struct {
 	Name     string
 	Duration time.Duration
 }
-type durationSlice []namedDuration
+type namedDurationSlice []namedDuration
 
-func (d durationSlice) Len() int           { return len(d) }
-func (d durationSlice) Less(i, j int) bool { return d[i].Duration < d[j].Duration }
-func (d durationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d namedDurationSlice) Len() int           { return len(d) }
+func (d namedDurationSlice) Less(i, j int) bool { return d[i].Duration < d[j].Duration }
+func (d namedDurationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 
 func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<h2>Total time spent building staging past 4 weeks</h2>`)
@@ -70,7 +70,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 		sums[name] += b.FinishedAt.Time.Sub(b.StartedAt.Time)
 	}
 
-	sumsList := make(durationSlice, 0, len(sums))
+	sumsList := make(namedDurationSlice, 0, len(sums))
 	for k, v := range sums {
 		sumsList = append(sumsList, namedDuration{k, v})
 	}
@@ -100,7 +100,7 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 		counts[name] += 1
 	}
 
-	sumsList := make(durationSlice, 0, len(sums))
+	sumsList := make(namedDurationSlice, 0, len(sums))
 	for k, v := range sums {
 		sumsList = append(sumsList, namedDuration{k, v / time.Duration(counts[k])})
 	}
