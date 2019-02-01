@@ -114,7 +114,7 @@ func (wr *Routes) averageTopList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `<h2>Build times over time</h2>`)
+	fmt.Fprintf(w, `<h2>Build times over time</h2><p>...for builds with at least two builds.</p>`)
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -122,14 +122,17 @@ func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	activePipelines := make(map[string]struct{})
+	activePipelines := make(map[string]int)
 	for _, b := range builds {
 		name := *b.Pipeline.Name
-		activePipelines[name] = struct{}{}
+		activePipelines[name]++
 	}
 
 	orderedList := make([]string, 0)
-	for k, _ := range activePipelines {
+	for k, count := range activePipelines {
+		if count <= 1 {
+			continue
+		}
 		orderedList = append(orderedList, k)
 	}
 	sort.Strings(orderedList)
