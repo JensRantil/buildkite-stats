@@ -39,7 +39,7 @@ func main() {
 
 	client := buildkite.NewClient(config.Client())
 	client.UserAgent = "tink-buildkite-stats/v1.0.0"
-	bk := NewCachingBuildkite(&NetworkBuildkite{client, org, branch}, 5*time.Minute)
+	bk := NewInMemCachingBuildkite(&NetworkBuildkite{client, org, branch}, 5*time.Minute)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)

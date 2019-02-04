@@ -11,7 +11,7 @@ type Buildkite interface {
 	ListBuilds(from time.Time) ([]buildkite.Build, error)
 }
 
-type CachingBuildkite struct {
+type InMemCachingBuildkite struct {
 	upstream Buildkite
 	duration time.Duration
 
@@ -20,14 +20,14 @@ type CachingBuildkite struct {
 	m     sync.Mutex
 }
 
-func NewCachingBuildkite(b Buildkite, d time.Duration) *CachingBuildkite {
-	return &CachingBuildkite{
+func NewInMemCachingBuildkite(b Buildkite, d time.Duration) *InMemCachingBuildkite {
+	return &InMemCachingBuildkite{
 		upstream: b,
 		duration: d,
 	}
 }
 
-func (b *CachingBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
+func (b *InMemCachingBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
 	b.m.Lock()
 	defer b.m.Unlock()
 
