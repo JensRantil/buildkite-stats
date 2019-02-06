@@ -8,6 +8,15 @@ Noteworthy details:
  * Since harvesting data can take ~30 seconds, the results are cached for (at
    most 10 minutes).
 
+Developing
+----------
+Install [Taskfile](https://taskfile.org) then run
+
+    BRANCH=master BUILDKITE_API_TOKEN=XYZ BUILDKITE_ORGANIZATION=my-org task --watch
+
+while modifying the files, you should have a running server automagically
+restarting in the background.
+
 Running
 -------
 First execute

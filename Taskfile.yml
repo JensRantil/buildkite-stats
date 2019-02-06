@@ -12,7 +12,7 @@ tasks:
     deps:
       - build
     cmds:
-      - ./{{.EXE}}
+      - ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --branch "$BRANCH" --buildkite-org "$BUILDKITE_ORGANIZATION"
 
   build:
     sources:
