@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
@@ -23,7 +25,7 @@ func main() {
 	kingpin.Parse()
 
 	//buildkite.SetHttpDebug(true) // Useful when debugging.
-	config, err := buildkite.NewTokenConfig(*apiToken, false)
+	config, err := buildkite.NewTokenConfig(optionalFileExpansion(*apiToken), false)
 
 	if err != nil {
 		log.Fatal("Incorrect token:", err)
@@ -44,4 +46,20 @@ func main() {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
+}
+
+func optionalFileExpansion(s string) string {
+	if strings.HasPrefix(s, "@") {
+		// Trimming trailing newline from K8s configmap.
+		return strings.TrimRight(string(readFileContent(s[1:])), "\n")
+	}
+	return s
+}
+
+func readFileContent(filename string) []byte {
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	return content
 }
