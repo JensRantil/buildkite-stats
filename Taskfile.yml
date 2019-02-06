@@ -1,7 +1,7 @@
 version: '2'
 
 vars:
-  EXE: buildkite-stats{{exeExt}}
+  EXE: tink-buildkite-stats{{exeExt}}
 
 tasks:
   default:
