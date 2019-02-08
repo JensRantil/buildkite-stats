@@ -22,6 +22,9 @@ func (wr *Routes) Routes() chi.Router {
 
 	r.Get("/", wr.root)
 	r.Get("/charts/{pipeline}", wr.charts)
+	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("pong"))
+	})
 
 	return r
 }
