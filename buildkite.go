@@ -55,7 +55,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error)
 	opts := &buildkite.BuildsListOptions{
 		ListOptions: buildkite.ListOptions{
 			Page:    0,
-			PerPage: 50,
+			PerPage: 100,
 		},
 		CreatedFrom: from,
 		State:       []string{"passed"},
