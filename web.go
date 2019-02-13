@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/ring"
 	"fmt"
 	"log"
 	"math"
@@ -10,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	chart "github.com/wcharczuk/go-chart"
+	"github.com/wcharczuk/go-chart"
 )
 
 type Routes struct {
@@ -21,7 +22,9 @@ func (wr *Routes) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/", wr.root)
-	r.Get("/charts/{pipeline}", wr.charts)
+	r.Get("/rolling-average", wr.root)
+
+	r.Get("/charts/{pipeline}/{mode}", wr.charts)
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
@@ -30,6 +33,12 @@ func (wr *Routes) Routes() chi.Router {
 }
 
 func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
+
+	chartMode := "all"
+	if r.RequestURI == "/rolling-average" {
+		chartMode = "rolling-average"
+	}
+
 	// TODO: https://github.com/UnnoTed/fileb0x for templates. See also
 	// https://github.com/go-task/examples/blob/master/go-web-app/Taskfile.yml#L63
 	fmt.Fprintf(w, `
@@ -41,7 +50,7 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
 	wr.totalTopList(w, r)
 	wr.percentileTopList(w, r, 90)
 
-	wr.printCharts(w, r)
+	wr.printCharts(w, r, chartMode)
 
 	fmt.Fprintf(w, `
 		</body>
@@ -134,8 +143,14 @@ func durationPercentile(a []time.Duration, perc float64) time.Duration {
 	return sorted[element]
 }
 
-func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
+func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode string) {
 	fmt.Fprintf(w, `<h2>Build times over time</h2><p>...for builds with at least two builds.</p>`)
+
+	if chartMode == "rolling-average" {
+		fmt.Fprintf(w, `<p>Currently displaying the rolling average (15 builds). <a href="/">Display all individual build times</a></p>`)
+	} else {
+		fmt.Fprintf(w, `<p>Currently displaying all builds individually. <a href="/rolling-average">Display rolling average</a></p>`)
+	}
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -159,7 +174,7 @@ func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(orderedList)
 
 	for _, pipeline := range orderedList {
-		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s" />`, pipeline, url.PathEscape(pipeline))
+		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s/%s" />`, pipeline, url.PathEscape(pipeline), chartMode)
 	}
 }
 
@@ -179,6 +194,7 @@ func DurationValueFormatter(v interface{}) string {
 
 func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	pipeline := chi.URLParam(r, "pipeline")
+	mode := chi.URLParam(r, "mode")
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
 	if err != nil {
@@ -196,15 +212,13 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Sort(items)
 
-	ts := chart.TimeSeries{
-		Style: chart.Style{
-			DotWidth: 3,
-			Show:     true,
-		},
-	}
-	for _, sample := range items {
-		ts.XValues = append(ts.XValues, sample.When)
-		ts.YValues = append(ts.YValues, sample.Duration.Seconds())
+	var ts chart.TimeSeries
+
+	switch mode {
+	case "rolling-average":
+		ts = rollingAverageTs(items)
+	default:
+		ts = allBuildsTs(items)
 	}
 
 	graph := chart.Chart{
@@ -230,6 +244,57 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	if err := graph.Render(chart.PNG, w); err != nil {
 		log.Println(err)
 	}
+}
+
+func allBuildsTs(items []timelineDuration) chart.TimeSeries {
+	allBuildsTS := chart.TimeSeries{
+		Style: chart.Style{
+			DotWidth: 3,
+			Show:     true,
+		},
+	}
+
+	for _, sample := range items {
+		allBuildsTS.XValues = append(allBuildsTS.XValues, sample.When)
+		allBuildsTS.YValues = append(allBuildsTS.YValues, sample.Duration.Seconds())
+	}
+
+	return allBuildsTS
+}
+
+func rollingAverageTs(items []timelineDuration) chart.TimeSeries {
+	rollingAverage := ring.New(15)
+
+	rollingAverageTS := chart.TimeSeries{
+		Style: chart.Style{
+			DotWidth: -1, // Don't show dots
+			Show: true,
+		},
+	}
+
+	for _, sample := range items {
+		// Save duration
+		rollingAverage.Value = sample.Duration.Seconds()
+
+		// Move ring to the next value
+		rollingAverage = rollingAverage.Next()
+
+		// Current average
+		var currentRollingSum float64
+		var currentRollingCount int
+
+		rollingAverage.Do(func (val interface{}) {
+			if val != nil {
+				currentRollingSum += val.(float64)
+				currentRollingCount++
+			}
+		})
+
+		rollingAverageTS.XValues = append(rollingAverageTS.XValues, sample.When)
+		rollingAverageTS.YValues = append(rollingAverageTS.YValues, currentRollingSum / float64(currentRollingCount))
+	}
+
+	return rollingAverageTS
 }
 
 func max(a []float64) float64 {
