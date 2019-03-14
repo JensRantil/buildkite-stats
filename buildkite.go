@@ -41,8 +41,8 @@ func (b *InMemCachingBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, e
 		b.cache = builds
 		b.key = cacheKey
 	}
-	return builds, err
 
+	return builds, err
 }
 
 type NetworkBuildkite struct {
