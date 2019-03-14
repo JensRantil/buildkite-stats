@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/wcharczuk/go-chart"
+	chart "github.com/wcharczuk/go-chart"
 )
 
 type Routes struct {
