@@ -268,7 +268,7 @@ func rollingAverageTs(items []timelineDuration) chart.TimeSeries {
 	rollingAverageTS := chart.TimeSeries{
 		Style: chart.Style{
 			DotWidth: -1, // Don't show dots
-			Show: true,
+			Show:     true,
 		},
 	}
 
@@ -283,7 +283,7 @@ func rollingAverageTs(items []timelineDuration) chart.TimeSeries {
 		var currentRollingSum float64
 		var currentRollingCount int
 
-		rollingAverage.Do(func (val interface{}) {
+		rollingAverage.Do(func(val interface{}) {
 			if val != nil {
 				currentRollingSum += val.(float64)
 				currentRollingCount++
@@ -291,7 +291,7 @@ func rollingAverageTs(items []timelineDuration) chart.TimeSeries {
 		})
 
 		rollingAverageTS.XValues = append(rollingAverageTS.XValues, sample.When)
-		rollingAverageTS.YValues = append(rollingAverageTS.YValues, currentRollingSum / float64(currentRollingCount))
+		rollingAverageTS.YValues = append(rollingAverageTS.YValues, currentRollingSum/float64(currentRollingCount))
 	}
 
 	return rollingAverageTS
