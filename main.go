@@ -41,6 +41,10 @@ func main() {
 	r.Use(middleware.DefaultLogger)
 	r.Mount("/", (&Routes{bk}).Routes())
 
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	log.Printf("Listening on port %d", *port)
 	server := http.Server{Addr: fmt.Sprintf(":%d", *port), Handler: r}
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {

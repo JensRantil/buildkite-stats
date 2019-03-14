@@ -10,6 +10,8 @@ import (
 	"sort"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/go-chi/chi"
 	chart "github.com/wcharczuk/go-chart"
 )
