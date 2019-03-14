@@ -7,15 +7,41 @@ import (
 	"github.com/buildkite/go-buildkite/buildkite"
 )
 
+type Build struct {
+	Pipeline   Pipeline
+	FinishedAt *time.Time
+	StartedAt  *time.Time
+}
+
+type Pipeline struct {
+	Name string
+}
+
+// Mapping to an internal struct will use a lot less memory.
+func newBuildFromBuildkite(b buildkite.Build) Build {
+	res := Build{
+		Pipeline: Pipeline{
+			Name: *b.Pipeline.Name,
+		},
+	}
+	if b.StartedAt != nil {
+		res.StartedAt = &b.StartedAt.Time
+	}
+	if b.FinishedAt != nil {
+		res.FinishedAt = &b.FinishedAt.Time
+	}
+	return res
+}
+
 type Buildkite interface {
-	ListBuilds(from time.Time) ([]buildkite.Build, error)
+	ListBuilds(from time.Time) ([]Build, error)
 }
 
 type InMemCachingBuildkite struct {
 	upstream Buildkite
 	duration time.Duration
 
-	cache []buildkite.Build
+	cache []Build
 	key   time.Time
 	m     sync.Mutex
 }
@@ -27,7 +53,7 @@ func NewInMemCachingBuildkite(b Buildkite, d time.Duration) *InMemCachingBuildki
 	}
 }
 
-func (b *InMemCachingBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
+func (b *InMemCachingBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 	b.m.Lock()
 	defer b.m.Unlock()
 
@@ -51,7 +77,7 @@ type NetworkBuildkite struct {
 	Branch string
 }
 
-func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error) {
+func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 	opts := &buildkite.BuildsListOptions{
 		ListOptions: buildkite.ListOptions{
 			Page:    1,
@@ -63,13 +89,16 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]buildkite.Build, error)
 	if b.Branch != "" {
 		opts.Branch = b.Branch
 	}
-	var result []buildkite.Build
+	var result []Build
 	for {
-		builds, resp, err := b.Client.Builds.ListByOrg(b.Org, opts)
+		bbuilds, resp, err := b.Client.Builds.ListByOrg(b.Org, opts)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
-		result = append(result, builds...)
+
+		for _, b := range bbuilds {
+			result = append(result, newBuildFromBuildkite(b))
+		}
 
 		if resp.NextPage <= 0 {
 			break
