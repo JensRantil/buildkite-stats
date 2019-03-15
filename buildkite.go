@@ -14,6 +14,7 @@ type Build struct {
 	Pipeline   Pipeline
 	FinishedAt *time.Time
 	StartedAt  *time.Time
+	CreatedAt  time.Time
 }
 
 type Pipeline struct {
@@ -26,7 +27,8 @@ func newBuildFromBuildkite(b buildkite.Build) Build {
 		Pipeline: Pipeline{
 			Name: *b.Pipeline.Name,
 		},
-		ID: *b.ID,
+		ID:        *b.ID,
+		CreatedAt: b.CreatedAt.Time,
 	}
 	if b.StartedAt != nil {
 		res.StartedAt = &b.StartedAt.Time
@@ -138,7 +140,7 @@ func (b *NetworkBuildkite) populateCache(current, next Build) error {
 		ttl = 10 * time.Minute
 	} else {
 		// we don't consider the build to update ever again
-		ttl = 30 * 24 * time.Hour
+		ttl = 60 * 24 * time.Hour
 	}
 
 	s, err := json.Marshal(next)
@@ -165,6 +167,11 @@ func (b *NetworkBuildkite) tryFromCache(until time.Time, from Build) ([]Build, e
 		if err != nil {
 			log.Panicln(err)
 		}
+
+		if until.Before(b.CreatedAt) {
+			break
+		}
+
 		res = append(res, b)
 
 		from = b
