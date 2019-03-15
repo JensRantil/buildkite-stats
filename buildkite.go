@@ -55,7 +55,7 @@ type Cache interface {
 	Get(k string) ([]byte, error)
 }
 
-const itemsPerPage = 100
+const itemsPerPage = 10
 
 func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 	opts := &buildkite.BuildsListOptions{
