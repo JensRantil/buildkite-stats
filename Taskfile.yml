@@ -12,7 +12,7 @@ tasks:
     deps:
       - build
     cmds:
-      - ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --branch "$BRANCH" --buildkite-org "$BUILDKITE_ORGANIZATION"
+      - ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --branch "$BRANCH" --buildkite-org "$BUILDKITE_ORGANIZATION" --memcache 127.0.0.1:11211
 
   build:
     sources:

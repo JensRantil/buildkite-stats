@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/buildkite/go-buildkite/buildkite"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -15,10 +16,11 @@ import (
 )
 
 var (
-	apiToken = kingpin.Flag("buildkite-token", "Buildkite API token. Requires `read_builds` permissions.").Required().String()
-	branch   = kingpin.Flag("branch", "GIT branches we are interested in. Can be defined multiple times.").Required().String()
-	org      = kingpin.Flag("buildkite-org", "Buildkite organization which is to be scraped.").Required().String()
-	port     = kingpin.Flag("port", "TCP port which the HTTP server should listen on.").Default("8080").Int()
+	apiToken       = kingpin.Flag("buildkite-token", "Buildkite API token. Requires `read_builds` permissions.").Required().String()
+	branch         = kingpin.Flag("branch", "GIT branches we are interested in. Can be defined multiple times.").Required().String()
+	org            = kingpin.Flag("buildkite-org", "Buildkite organization which is to be scraped.").Required().String()
+	port           = kingpin.Flag("port", "TCP port which the HTTP server should listen on.").Default("8080").Int()
+	memcachedAddrs = kingpin.Flag("memcache", "Memcache broker addresses (eg. 127.0.0.1:11211).").Strings()
 )
 
 func main() {
@@ -31,9 +33,14 @@ func main() {
 		log.Fatal("Incorrect token:", err)
 	}
 
+	var cache Cache
+	if len(*memcachedAddrs) > 0 {
+		cache = &MemcacheCache{memcache.New(*memcachedAddrs...)}
+	}
+
 	client := buildkite.NewClient(config.Client())
 	client.UserAgent = "tink-buildkite-stats/v1.0.0"
-	bk := NewInMemCachingBuildkite(&NetworkBuildkite{client, *org, *branch}, 5*time.Minute)
+	bk := &NetworkBuildkite{client, *org, *branch, cache}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -50,6 +57,27 @@ func main() {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
+}
+
+type MemcacheCache struct {
+	c *memcache.Client
+}
+
+func (m *MemcacheCache) Put(k string, v []byte, ttl time.Duration) error {
+	return m.c.Set(&memcache.Item{
+		Key:        k,
+		Value:      v,
+		Expiration: int32(time.Now().Add(ttl).Unix()),
+	})
+}
+
+func (m *MemcacheCache) Get(k string) ([]byte, error) {
+	var res []byte
+	item, err := m.c.Get(k)
+	if err == nil {
+		res = item.Value
+	}
+	return res, err
 }
 
 func optionalFileExpansion(s string) string {
