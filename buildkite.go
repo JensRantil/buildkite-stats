@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
-	"google.golang.org/appengine/memcache"
 )
 
 type Build struct {
@@ -55,16 +58,70 @@ type Cache interface {
 	Get(k string) ([]byte, error)
 }
 
-const itemsPerPage = 10
+const itemsPerPage = 100
 
 func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
+	to := time.Now()
+
+	startDay := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
+	endDay := startDay.Add(24 * time.Hour)
+
+	var res []Build
+	for startDay.Before(to) {
+		var cacheTTL time.Duration
+		if time.Now().Sub(minTime(endDay, to)) > 12*time.Hour {
+			// Cache aggresively for older builds. We don't expect them to be
+			// modified.
+			cacheTTL = 60 * 24 * time.Hour
+		} else {
+			cacheTTL = 10 * time.Minute
+		}
+
+		b, err := b.listBuildsBetween(maxTime(startDay, from), minTime(endDay, to), cacheTTL)
+		if err != nil {
+			return res, err
+		}
+		res = append(res, b...)
+
+		startDay, endDay = startDay.Add(24*time.Hour), endDay.Add(24*time.Hour)
+	}
+
+	return res, nil
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	} else {
+		return b
+	}
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	} else {
+		return b
+	}
+}
+
+func (b *NetworkBuildkite) listBuildsBetween(from, to time.Time, cacheTTL time.Duration) ([]Build, error) {
+	cacheKey := fmt.Sprintf("%d-%d", from.Unix(), to.Unix())
+	cached, err := b.tryFromCache(cacheKey)
+	if err == nil {
+		return cached, err
+	}
+
 	opts := &buildkite.BuildsListOptions{
 		ListOptions: buildkite.ListOptions{
 			Page:    1,
 			PerPage: itemsPerPage,
 		},
 		CreatedFrom: from,
-		State:       []string{"passed"},
+		CreatedTo:   to,
+
+		// This implies that all `Build`s will have FinishedAt set.
+		State: []string{"passed"},
 	}
 	if b.Branch != "" {
 		opts.Branch = b.Branch
@@ -77,44 +134,15 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 			return nil, err
 		}
 
-		// Populate the cache.
-		for i, build := range builds {
-			if i > 0 {
-				// We are not mapping builds between pages because there might
-				// be new build which is being pushed while we are iterating.
-				// If that happens, we could see the last build on previous
-				// page being the same build as the first build on the current
-				// page. If so, we would mapping the same build to itself,
-				// which in turn would lead to circular dependencies in the
-				// cache.
-				_ = b.populateCache(builds[i-1], build)
-			}
-		}
-
 		result = append(result, builds...)
 
 		if resp.NextPage <= 0 {
 			break
 		}
-
-		// Try to read from cache if possible.
-		if len(result) > 0 {
-			cached, err := b.tryFromCache(from, result[len(result)-1])
-			result = append(result, cached...)
-			if err == nil {
-				// we managed to fetch all items from cache
-				return result, nil
-			} else {
-				// there is a race condition here if there was a new build that came in while we were paging.
-				resp.NextPage = len(result)/itemsPerPage + 1
-			}
-		}
-
 		opts.ListOptions.Page = resp.NextPage
 	}
 
-	// due to the race condition mentioned above this function is needed to make sure we don't have race conditions
-	result = removeDuplicates(result)
+	_ = b.populateCache(cacheKey, result, cacheTTL)
 
 	return result, nil
 }
@@ -133,60 +161,62 @@ func (b *NetworkBuildkite) query(org string, opts *buildkite.BuildsListOptions) 
 	return result, resp, err
 }
 
-func (b *NetworkBuildkite) populateCache(current, next Build) error {
-	var ttl time.Duration
-	if next.FinishedAt == nil {
-		// we consider the build to be updated quite soon
-		ttl = 10 * time.Minute
-	} else {
-		// we don't consider the build to update ever again
-		ttl = 60 * 24 * time.Hour
-	}
-
-	s, err := json.Marshal(next)
+func (b *NetworkBuildkite) populateCache(key string, builds []Build, ttl time.Duration) error {
+	s, err := json.Marshal(builds)
 	if err != nil {
 		log.Panicln(err)
 	}
 
-	return b.Cache.Put(current.ID, s, ttl)
+	// Compressing to make this a bit more future proof in case we have a _lot_
+	// of builds per key one day - memcache keys usually can't be larger than 1
+	// MB. We could of course switch to serialize to something like less
+	// verbose like protobuf, but let's keep it simple for now.
+	s = compress(s)
+
+	return b.Cache.Put(key, s, ttl)
 }
 
-func (b *NetworkBuildkite) tryFromCache(until time.Time, from Build) ([]Build, error) {
+func (b *NetworkBuildkite) tryFromCache(key string) ([]Build, error) {
 	var res []Build
-	for {
-		s, err := b.Cache.Get(from.ID)
-		if err != nil {
-			if err == memcache.ErrCacheMiss {
-				break
-			}
-			return res, err
-		}
-
-		var b Build
-		err = json.Unmarshal(s, &b)
-		if err != nil {
-			log.Panicln(err)
-		}
-
-		if until.Before(b.CreatedAt) {
-			break
-		}
-
-		res = append(res, b)
-
-		from = b
+	s, err := b.Cache.Get(key)
+	if err != nil {
+		return res, err
 	}
+
+	s = decompress(s)
+
+	err = json.Unmarshal(s, &res)
+	if err != nil {
+		log.Panicln(err)
+	}
+
 	return res, nil
 }
 
-func removeDuplicates(builds []Build) (res []Build) {
-	seen := make(map[string]struct{})
-	for _, b := range builds {
-		if _, alreadySeen := seen[b.ID]; alreadySeen {
-			continue
-		}
-		res = append(res, b)
-		seen[b.ID] = struct{}{}
+func compress(b []byte) []byte {
+	input := bytes.NewBuffer(b)
+	output := bytes.NewBuffer(nil)
+	r := gzip.NewWriter(output)
+	_, _ = io.Copy(r, input)
+	_ = r.Close()
+	return output.Bytes()
+}
+
+func decompress(b []byte) []byte {
+	input := bytes.NewBuffer(b)
+	output := bytes.NewBuffer(nil)
+	var err error
+	r, err := gzip.NewReader(input)
+	if err != nil {
+		log.Panicln("unable to create gzip reader:", err)
 	}
-	return
+	_, err = io.Copy(output, r)
+	if err != nil {
+		log.Panicln("unable to decompress:", err)
+	}
+	err = r.Close()
+	if err != nil {
+		log.Panicln("unable to Close when decompressing:", err)
+	}
+	return output.Bytes()
 }
