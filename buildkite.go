@@ -107,7 +107,7 @@ func maxTime(a, b time.Time) time.Time {
 
 func (b *NetworkBuildkite) listBuildsBetween(from, to time.Time, cacheTTL time.Duration) ([]Build, error) {
 	cacheKey := fmt.Sprintf("%d-%d", from.Unix(), to.Unix())
-	cached, err := b.tryFromCache(cacheKey)
+	cached, err := b.readFromCache(cacheKey)
 	if err == nil {
 		return cached, err
 	}
@@ -176,7 +176,7 @@ func (b *NetworkBuildkite) populateCache(key string, builds []Build, ttl time.Du
 	return b.Cache.Put(key, s, ttl)
 }
 
-func (b *NetworkBuildkite) tryFromCache(key string) ([]Build, error) {
+func (b *NetworkBuildkite) readFromCache(key string) ([]Build, error) {
 	var res []Build
 	s, err := b.Cache.Get(key)
 	if err != nil {
