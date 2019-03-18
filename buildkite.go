@@ -66,11 +66,18 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 
 	var res []Build
 	for _, interval := range generateDailyIntervals(from, to) {
-		b, err := b.listBuildsBetween(interval, cacheTTL(interval))
+		bs, err := b.listBuildsBetween(interval, cacheTTL(interval))
 		if err != nil {
 			return res, err
 		}
-		res = append(res, b...)
+		for _, b := range bs {
+			if b.CreatedAt.After(from) && b.CreatedAt.Before(to) {
+				// Note that the daily intervals will be a superset of [to,
+				// from). This is to get the cached buckets static. This means
+				// that we need to do some filtering here.
+				res = append(res, b)
+			}
+		}
 	}
 
 	return res, nil
@@ -99,7 +106,7 @@ func generateDailyIntervals(from, to time.Time) []timeInterval {
 
 	var res []timeInterval
 	for startDay.Before(to) {
-		res = append(res, timeInterval{maxTime(startDay, from), minTime(endDay, to)})
+		res = append(res, timeInterval{startDay, endDay})
 		startDay, endDay = startDay.Add(24*time.Hour), endDay.Add(24*time.Hour)
 	}
 	return res
