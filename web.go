@@ -141,7 +141,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request, q Query) 
 
 	sums := make(map[string]time.Duration)
 	for _, b := range builds {
-		name := b.Pipeline.Name
+		name := q.Group(b)
 		sums[name] += q.Duration(b)
 	}
 
@@ -170,7 +170,7 @@ func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc
 
 	durationsByPipeline := make(map[string][]time.Duration)
 	for _, b := range builds {
-		name := b.Pipeline.Name
+		name := q.Group(b)
 		durationsByPipeline[name] = append(durationsByPipeline[name], q.Duration(b))
 	}
 
@@ -222,7 +222,7 @@ func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode 
 
 	activePipelines := make(map[string]int)
 	for _, b := range builds {
-		name := b.Pipeline.Name
+		name := q.Group(b)
 		activePipelines[name]++
 	}
 
@@ -272,7 +272,7 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 
 	items := make(timelineSlice, 0)
 	for _, b := range builds {
-		name := b.Pipeline.Name
+		name := query.Group(b)
 		if name != pipeline {
 			continue
 		}
