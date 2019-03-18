@@ -24,7 +24,7 @@ var (
 	org            = kingpin.Flag("buildkite-org", "Buildkite organization which is to be scraped.").Required().String()
 	port           = kingpin.Flag("port", "TCP port which the HTTP server should listen on.").Default("8080").Int()
 	memcachedAddrs = kingpin.Flag("memcache", "Memcache broker addresses (eg. 127.0.0.1:11211).").Strings()
-	reports        = kingpin.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in (defaults to '*.' if missing), 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
+	reports        = kingpin.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in, 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
 )
 
 func main() {
