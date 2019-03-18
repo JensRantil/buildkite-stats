@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
@@ -71,8 +72,10 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 		var cacheTTL time.Duration
 		if time.Now().Sub(minTime(endDay, to)) > 12*time.Hour {
 			// Cache aggresively for older builds. We don't expect them to be
-			// modified.
-			cacheTTL = 60 * 24 * time.Hour
+			// modified. Use spread to not have to reload all builds at the
+			// same time.
+			spread := time.Duration(rand.Intn(7*24)) * time.Hour
+			cacheTTL = 60*24*time.Hour + spread
 		} else {
 			cacheTTL = 10 * time.Minute
 		}
