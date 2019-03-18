@@ -78,7 +78,6 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 		if err != nil {
 			return res, err
 		}
-		log.Println("...found", len(bs), "builds.")
 		for _, b := range bs {
 			if b.CreatedAt.After(from) && b.CreatedAt.Before(to) && pred.Predicate(b) {
 				// Note that the daily intervals will be a superset of [to,
@@ -87,7 +86,6 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 				res = append(res, b)
 			}
 		}
-		log.Println("So far collected", len(res), "builds.")
 	}
 
 	return res, nil
