@@ -39,7 +39,14 @@ func (wr *Routes) Routes() chi.Router {
 }
 
 func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/0/", 303)
+	wr.printTopHtml(w, r)
+	fmt.Fprintf(w, `<h1>Buildkite Dashboard</h1>`)
+	fmt.Fprintf(w, `<ul>`)
+	for i, q := range wr.Queries {
+		fmt.Fprintf(w, `<li><a href="/%d/">%s</a></li>`, i, q.Name)
+	}
+	fmt.Fprintf(w, `</ul>`)
+	wr.printBottomHtml(w, r)
 }
 
 func (wr *Routes) query(r *http.Request) (int, Query, error) {
@@ -66,15 +73,15 @@ func (wr *Routes) report(w http.ResponseWriter, r *http.Request) {
 		chartMode = "rolling-average"
 	}
 
-	wr.printTopHtml(w, r, queryIndex)
+	wr.printTopHtml(w, r)
+	fmt.Fprintf(w, `<h1>%s</h1>`, query.Name)
 	wr.totalTopList(w, r, query)
 	wr.percentileTopList(w, r, 90, query)
 	wr.printCharts(w, r, chartMode, queryIndex, query)
 	wr.printBottomHtml(w, r)
 }
 
-func (wr *Routes) printTopHtml(w http.ResponseWriter, r *http.Request, queryIndex int) {
-	// TODO: Add navbar with report selected based on queryIndex.
+func (wr *Routes) printTopHtml(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html lang="">
@@ -99,8 +106,7 @@ func (wr *Routes) printTopHtml(w http.ResponseWriter, r *http.Request, queryInde
   <div class="starter-template">
       <div class="container">
         <div class="row">
-          <div class="col-md-12">
-            <h1>Buildkite Dashboard</h1>`)
+          <div class="col-md-12">`)
 }
 
 func (wr *Routes) printBottomHtml(w http.ResponseWriter, r *http.Request) {
