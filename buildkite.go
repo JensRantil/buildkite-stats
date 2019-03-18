@@ -96,7 +96,7 @@ func cacheTTL(interval timeInterval) time.Duration {
 		// Cache aggresively for older builds. We don't expect them to be
 		// modified. Use spread to not have to reload all builds at the
 		// same time.
-		spread := time.Duration(rand.Intn(7*24)) * time.Hour
+		spread := time.Duration(rand.Intn(20*24*60)) * time.Minute
 		return 60*24*time.Hour + spread
 	} else if time.Now().Sub(interval.To) > 1*time.Hour {
 		return 2 * time.Hour
