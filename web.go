@@ -119,7 +119,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Sort(sort.Reverse(sumsList))
 
-	fmt.Fprintf(w, `<table class="table"><tr><th>Pipeline</th><th>Total Duration</th></tr>`)
+	fmt.Fprintf(w, `<table class="table table-condensed"><tr><th>Pipeline</th><th>Total Duration</th></tr>`)
 	for _, pipeline := range sumsList {
 		fmt.Fprintf(w, `<tr><th>%s</th><td>%s</td></tr>`, pipeline.Name, pipeline.Duration)
 	}
@@ -151,7 +151,7 @@ func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc
 	}
 	sort.Sort(sort.Reverse(sumsList))
 
-	fmt.Fprintf(w, `<table class="table"><tr><th>Pipeline</th><th>%dth percentile</th></tr>`, perc)
+	fmt.Fprintf(w, `<table class="table table-condensed"><tr><th>Pipeline</th><th>%dth percentile</th></tr>`, perc)
 	for _, pipeline := range sumsList {
 		fmt.Fprintf(w, `<tr><th>%s</th><td>%s</td></tr>`, pipeline.Name, pipeline.Duration.Truncate(time.Second))
 	}
