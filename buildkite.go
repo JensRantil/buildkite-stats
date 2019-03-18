@@ -66,18 +66,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 
 	var res []Build
 	for _, interval := range generateDailyIntervals(from, to) {
-		var cacheTTL time.Duration
-		if time.Now().Sub(interval.To) > 12*time.Hour {
-			// Cache aggresively for older builds. We don't expect them to be
-			// modified. Use spread to not have to reload all builds at the
-			// same time.
-			spread := time.Duration(rand.Intn(7*24)) * time.Hour
-			cacheTTL = 60*24*time.Hour + spread
-		} else {
-			cacheTTL = 10 * time.Minute
-		}
-
-		b, err := b.listBuildsBetween(interval, cacheTTL)
+		b, err := b.listBuildsBetween(interval, cacheTTL(interval))
 		if err != nil {
 			return res, err
 		}
@@ -85,6 +74,18 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 	}
 
 	return res, nil
+}
+
+func cacheTTL(interval timeInterval) time.Duration {
+	if time.Now().Sub(interval.To) > 12*time.Hour {
+		// Cache aggresively for older builds. We don't expect them to be
+		// modified. Use spread to not have to reload all builds at the
+		// same time.
+		spread := time.Duration(rand.Intn(7*24)) * time.Hour
+		return 60*24*time.Hour + spread
+	} else {
+		return 10 * time.Minute
+	}
 }
 
 type timeInterval struct {
