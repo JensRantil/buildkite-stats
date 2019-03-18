@@ -14,11 +14,12 @@ import (
 )
 
 type Build struct {
-	ID         string
-	Pipeline   Pipeline
-	FinishedAt time.Time
-	StartedAt  time.Time
-	CreatedAt  time.Time
+	ID          string
+	Pipeline    Pipeline
+	ScheduledAt time.Time
+	FinishedAt  time.Time
+	StartedAt   time.Time
+	CreatedAt   time.Time
 }
 
 type Pipeline struct {
@@ -38,6 +39,7 @@ func newBuildFromBuildkite(b buildkite.Build) Build {
 		// querying from Buildkite.
 		CreatedAt:   b.CreatedAt.Time,
 		StartedAt:   b.StartedAt.Time,
+		ScheduledAt: b.ScheduledAt.Time,
 
 		FinishedAt: b.FinishedAt.Time,
 	}
