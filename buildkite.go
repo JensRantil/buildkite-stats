@@ -112,22 +112,6 @@ func generateDailyIntervals(from, to time.Time) []timeInterval {
 	return res
 }
 
-func minTime(a, b time.Time) time.Time {
-	if a.Before(b) {
-		return a
-	} else {
-		return b
-	}
-}
-
-func maxTime(a, b time.Time) time.Time {
-	if a.After(b) {
-		return a
-	} else {
-		return b
-	}
-}
-
 func (b *NetworkBuildkite) listBuildsBetween(interval timeInterval, cacheTTL time.Duration) ([]Build, error) {
 	cacheKey := fmt.Sprintf("%d-%d", interval.From.Unix(), interval.To.Unix())
 	cached, err := b.readFromCache(cacheKey)
