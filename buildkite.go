@@ -64,13 +64,10 @@ const itemsPerPage = 100
 func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 	to := time.Now()
 
-	startDay := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
-	endDay := startDay.Add(24 * time.Hour)
-
 	var res []Build
-	for startDay.Before(to) {
+	for _, interval := range generateDailyIntervals(from, to) {
 		var cacheTTL time.Duration
-		if time.Now().Sub(minTime(endDay, to)) > 12*time.Hour {
+		if time.Now().Sub(interval.To) > 12*time.Hour {
 			// Cache aggresively for older builds. We don't expect them to be
 			// modified. Use spread to not have to reload all builds at the
 			// same time.
@@ -80,16 +77,31 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
 			cacheTTL = 10 * time.Minute
 		}
 
-		b, err := b.listBuildsBetween(maxTime(startDay, from), minTime(endDay, to), cacheTTL)
+		b, err := b.listBuildsBetween(interval, cacheTTL)
 		if err != nil {
 			return res, err
 		}
 		res = append(res, b...)
-
-		startDay, endDay = startDay.Add(24*time.Hour), endDay.Add(24*time.Hour)
 	}
 
 	return res, nil
+}
+
+type timeInterval struct {
+	From time.Time
+	To   time.Time
+}
+
+func generateDailyIntervals(from, to time.Time) []timeInterval {
+	startDay := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
+	endDay := startDay.Add(24 * time.Hour)
+
+	var res []timeInterval
+	for startDay.Before(to) {
+		res = append(res, timeInterval{maxTime(startDay, from), minTime(endDay, to)})
+		startDay, endDay = startDay.Add(24*time.Hour), endDay.Add(24*time.Hour)
+	}
+	return res
 }
 
 func minTime(a, b time.Time) time.Time {
@@ -108,8 +120,8 @@ func maxTime(a, b time.Time) time.Time {
 	}
 }
 
-func (b *NetworkBuildkite) listBuildsBetween(from, to time.Time, cacheTTL time.Duration) ([]Build, error) {
-	cacheKey := fmt.Sprintf("%d-%d", from.Unix(), to.Unix())
+func (b *NetworkBuildkite) listBuildsBetween(interval timeInterval, cacheTTL time.Duration) ([]Build, error) {
+	cacheKey := fmt.Sprintf("%d-%d", interval.From.Unix(), interval.To.Unix())
 	cached, err := b.readFromCache(cacheKey)
 	if err == nil {
 		return cached, err
@@ -120,8 +132,8 @@ func (b *NetworkBuildkite) listBuildsBetween(from, to time.Time, cacheTTL time.D
 			Page:    1,
 			PerPage: itemsPerPage,
 		},
-		CreatedFrom: from,
-		CreatedTo:   to,
+		CreatedFrom: interval.From,
+		CreatedTo:   interval.To,
 
 		// This implies that all `Build`s will have FinishedAt set.
 		State: []string{"passed"},
