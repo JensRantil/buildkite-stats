@@ -72,7 +72,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 	to := time.Now()
 
 	var res []Build
-	for _, interval := range generateDailyIntervals(from, to) {
+	for _, interval := range generateDailyIntervals(from, to, time.Hour) {
 		log.Printf("Querying %+v...\n", interval)
 		bs, err := b.listBuildsBetween(interval, cacheTTL(interval))
 		if err != nil {
@@ -108,14 +108,14 @@ type timeInterval struct {
 	To   time.Time
 }
 
-func generateDailyIntervals(from, to time.Time) []timeInterval {
-	startDay := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
-	endDay := startDay.Add(24 * time.Hour)
+func generateDailyIntervals(from, to time.Time, chunks time.Duration) []timeInterval {
+	start := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
+	end := start.Add(chunks)
 
 	var res []timeInterval
-	for startDay.Before(to) {
-		res = append(res, timeInterval{startDay, endDay})
-		startDay, endDay = startDay.Add(24*time.Hour), endDay.Add(24*time.Hour)
+	for start.Before(to) {
+		res = append(res, timeInterval{start, end})
+		start, end = start.Add(chunks), end.Add(chunks)
 	}
 	return res
 }
