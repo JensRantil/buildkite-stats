@@ -44,10 +44,31 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
 	// TODO: https://github.com/UnnoTed/fileb0x for templates. See also
 	// https://github.com/go-task/examples/blob/master/go-web-app/Taskfile.yml#L63
 	fmt.Fprintf(w, `
-		<html>
-		<head><title>Buildkite dashboard</title></head>
-		<body>
-		<h1>Buildkite Dashboard</h1>`)
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="pyramid web application">
+    <link rel="shortcut icon" href="/static/favicon.ico">
+
+    <title>Buildkite dashboard</title>
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="//oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js" integrity="sha384-0s5Pv64cNZJieYFkXYOTId2HMA2Lfb6q2nAcx2n0RTLUnCAoTTsS0nKEO27XyKcY" crossorigin="anonymous"></script>
+      <script src="//oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js" integrity="sha384-f1r2UzjsxZ9T4V1f2zBO/evUqSEOpeaUUZcMTz1Up63bl4ruYnFYeM+BxI4NhyI0" crossorigin="anonymous"></script>
+    <![endif]-->
+  </head>
+  <div class="starter-template">
+      <div class="container">
+        <div class="row">
+          <div class="col-md-12">
+            <h1>Buildkite Dashboard</h1>`)
 
 	wr.totalTopList(w, r)
 	wr.percentileTopList(w, r, 90)
@@ -55,6 +76,10 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
 	wr.printCharts(w, r, chartMode)
 
 	fmt.Fprintf(w, `
+	      </div>
+        </div>
+      </div>
+    </div>
 		</body>
 		</html>
 		`)
@@ -94,7 +119,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Sort(sort.Reverse(sumsList))
 
-	fmt.Fprintf(w, `<table><tr><th>Pipeline</th><th>Total Duration</th></tr>`)
+	fmt.Fprintf(w, `<table class="table"><tr><th>Pipeline</th><th>Total Duration</th></tr>`)
 	for _, pipeline := range sumsList {
 		fmt.Fprintf(w, `<tr><th>%s</th><td>%s</td></tr>`, pipeline.Name, pipeline.Duration)
 	}
@@ -126,7 +151,7 @@ func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc
 	}
 	sort.Sort(sort.Reverse(sumsList))
 
-	fmt.Fprintf(w, `<table><tr><th>Pipeline</th><th>%dth percentile</th></tr>`, perc)
+	fmt.Fprintf(w, `<table class="table"><tr><th>Pipeline</th><th>%dth percentile</th></tr>`, perc)
 	for _, pipeline := range sumsList {
 		fmt.Fprintf(w, `<tr><th>%s</th><td>%s</td></tr>`, pipeline.Name, pipeline.Duration.Truncate(time.Second))
 	}
