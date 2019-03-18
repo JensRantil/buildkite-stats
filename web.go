@@ -41,8 +41,6 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
 		chartMode = "rolling-average"
 	}
 
-	// TODO: https://github.com/UnnoTed/fileb0x for templates. See also
-	// https://github.com/go-task/examples/blob/master/go-web-app/Taskfile.yml#L63
 	fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html lang="">
