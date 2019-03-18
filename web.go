@@ -107,10 +107,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	sums := make(map[string]time.Duration)
 	for _, b := range builds {
 		name := b.Pipeline.Name
-		if b.FinishedAt == nil {
-			continue
-		}
-		sums[name] += b.FinishedAt.Sub(*b.StartedAt)
+		sums[name] += b.FinishedAt.Sub(b.StartedAt)
 	}
 
 	sumsList := make(namedDurationSlice, 0, len(sums))
@@ -139,10 +136,7 @@ func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc
 	durationsByPipeline := make(map[string][]time.Duration)
 	for _, b := range builds {
 		name := b.Pipeline.Name
-		if b.FinishedAt == nil {
-			continue
-		}
-		durationsByPipeline[name] = append(durationsByPipeline[name], b.FinishedAt.Sub(*b.StartedAt))
+		durationsByPipeline[name] = append(durationsByPipeline[name], b.FinishedAt.Sub(b.StartedAt))
 	}
 
 	sumsList := make(namedDurationSlice, 0, len(durationsByPipeline))
@@ -238,10 +232,10 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	items := make(timelineSlice, 0)
 	for _, b := range builds {
 		name := b.Pipeline.Name
-		if name != pipeline || b.FinishedAt == nil {
+		if name != pipeline {
 			continue
 		}
-		items = append(items, timelineDuration{*b.StartedAt, b.FinishedAt.Sub(*b.StartedAt)})
+		items = append(items, timelineDuration{b.StartedAt, b.FinishedAt.Sub(b.StartedAt)})
 	}
 	sort.Sort(items)
 

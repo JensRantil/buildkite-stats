@@ -16,8 +16,8 @@ import (
 type Build struct {
 	ID         string
 	Pipeline   Pipeline
-	FinishedAt *time.Time
-	StartedAt  *time.Time
+	FinishedAt time.Time
+	StartedAt  time.Time
 	CreatedAt  time.Time
 }
 
@@ -31,14 +31,15 @@ func newBuildFromBuildkite(b buildkite.Build) Build {
 		Pipeline: Pipeline{
 			Name: *b.Pipeline.Name,
 		},
-		ID:        *b.ID,
-		CreatedAt: b.CreatedAt.Time,
-	}
-	if b.StartedAt != nil {
-		res.StartedAt = &b.StartedAt.Time
-	}
-	if b.FinishedAt != nil {
-		res.FinishedAt = &b.FinishedAt.Time
+		ID: *b.ID,
+
+		// We can safely assumed that all timestamps are set in the input, as
+		// we have a requirement that all builds should be finished when
+		// querying from Buildkite.
+		CreatedAt:   b.CreatedAt.Time,
+		StartedAt:   b.StartedAt.Time,
+
+		FinishedAt: b.FinishedAt.Time,
 	}
 	return res
 }
