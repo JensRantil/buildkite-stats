@@ -2,12 +2,14 @@ package main
 
 import (
 	"container/ring"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"time"
 
 	_ "net/http/pprof"
@@ -18,15 +20,17 @@ import (
 
 type Routes struct {
 	Buildkite Buildkite
+	Queries   []Query
 }
 
 func (wr *Routes) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/", wr.root)
-	r.Get("/rolling-average", wr.root)
+	r.Get("/{query}/", wr.report)
+	r.Get("/{query}/rolling-average", wr.root)
 
-	r.Get("/charts/{pipeline}/{mode}", wr.charts)
+	r.Get("/{query}/charts/{pipeline}/{mode}", wr.charts)
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
@@ -35,12 +39,42 @@ func (wr *Routes) Routes() chi.Router {
 }
 
 func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/0/", 303)
+}
+
+func (wr *Routes) query(r *http.Request) (int, Query, error) {
+	query := chi.URLParam(r, "query")
+	i, err := strconv.Atoi(query)
+	if err != nil {
+		return i, Query{}, err
+	}
+	if i < 0 || i >= len(wr.Queries) {
+		return i, Query{}, errors.New("query missing")
+	}
+	return i, wr.Queries[i], nil
+}
+
+func (wr *Routes) report(w http.ResponseWriter, r *http.Request) {
+	queryIndex, query, err := wr.query(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 
 	chartMode := "all"
 	if r.RequestURI == "/rolling-average" {
 		chartMode = "rolling-average"
 	}
 
+	wr.printTopHtml(w, r, queryIndex)
+	wr.totalTopList(w, r, query)
+	wr.percentileTopList(w, r, 90, query)
+	wr.printCharts(w, r, chartMode, queryIndex, query)
+	wr.printBottomHtml(w, r)
+}
+
+func (wr *Routes) printTopHtml(w http.ResponseWriter, r *http.Request, queryIndex int) {
+	// TODO: Add navbar with report selected based on queryIndex.
 	fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html lang="">
@@ -67,12 +101,9 @@ func (wr *Routes) root(w http.ResponseWriter, r *http.Request) {
         <div class="row">
           <div class="col-md-12">
             <h1>Buildkite Dashboard</h1>`)
+}
 
-	wr.totalTopList(w, r)
-	wr.percentileTopList(w, r, 90)
-
-	wr.printCharts(w, r, chartMode)
-
+func (wr *Routes) printBottomHtml(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
 	      </div>
         </div>
@@ -93,10 +124,10 @@ func (d namedDurationSlice) Len() int           { return len(d) }
 func (d namedDurationSlice) Less(i, j int) bool { return d[i].Duration < d[j].Duration }
 func (d namedDurationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 
-func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
+func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request, q Query) {
 	fmt.Fprintf(w, `<h2>Total time spent building staging past 4 weeks</h2>`)
 
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
 	if err != nil {
 		// TODO: Return error.
 		return
@@ -121,11 +152,11 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `</table>`)
 }
 
-func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc int) {
+func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc int, q Query) {
 	fmt.Fprintf(w, `<h2>%dth percentile of time spent building staging past 4 weeks</h2>`, perc)
 	fperc := float64(perc) / 100
 
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
 	if err != nil {
 		// TODO: Return error.
 		return
@@ -168,16 +199,16 @@ func durationPercentile(a []time.Duration, perc float64) time.Duration {
 	return sorted[element]
 }
 
-func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode string) {
+func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode string, queryIndex int, q Query) {
 	fmt.Fprintf(w, `<h2>Build times over time</h2><p>...for builds with at least two builds.</p>`)
 
 	if chartMode == "rolling-average" {
-		fmt.Fprintf(w, `<p>Currently displaying the rolling average (15 builds). <a href="/">Display all individual build times</a></p>`)
+		fmt.Fprintf(w, `<p>Currently displaying the rolling average (15 builds). <a href="/%d/">Display all individual build times</a></p>`, queryIndex)
 	} else {
-		fmt.Fprintf(w, `<p>Currently displaying all builds individually. <a href="/rolling-average">Display rolling average</a></p>`)
+		fmt.Fprintf(w, `<p>Currently displaying all builds individually. <a href="/%d/rolling-average">Display rolling average</a></p>`, queryIndex)
 	}
 
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
 	if err != nil {
 		// TODO: Return error.
 		return
@@ -199,7 +230,7 @@ func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode 
 	sort.Strings(orderedList)
 
 	for _, pipeline := range orderedList {
-		fmt.Fprintf(w, `<h3>%s</h3><img src="/charts/%s/%s" />`, pipeline, url.PathEscape(pipeline), chartMode)
+		fmt.Fprintf(w, `<h3>%s</h3><img src="/%d/charts/%s/%s" />`, pipeline, queryIndex, url.PathEscape(pipeline), chartMode)
 	}
 }
 
@@ -221,7 +252,13 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 	pipeline := chi.URLParam(r, "pipeline")
 	mode := chi.URLParam(r, "mode")
 
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r))
+	_, query, err := wr.query(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r), query)
 	if err != nil {
 		// TODO: Return error.
 		return

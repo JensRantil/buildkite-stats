@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,10 +21,10 @@ import (
 
 var (
 	apiToken       = kingpin.Flag("buildkite-token", "Buildkite API token. Requires `read_builds` permissions.").Required().String()
-	branch         = kingpin.Flag("branch", "GIT branches we are interested in. Can be defined multiple times.").Required().String()
 	org            = kingpin.Flag("buildkite-org", "Buildkite organization which is to be scraped.").Required().String()
 	port           = kingpin.Flag("port", "TCP port which the HTTP server should listen on.").Default("8080").Int()
 	memcachedAddrs = kingpin.Flag("memcache", "Memcache broker addresses (eg. 127.0.0.1:11211).").Strings()
+	reports        = kingpin.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in (defaults to '*.' if missing), 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
 )
 
 func main() {
@@ -38,15 +42,17 @@ func main() {
 		cache = &MemcacheCache{memcache.New(*memcachedAddrs...)}
 	}
 
+	queries := mustBuildQueries(*reports)
+
 	client := buildkite.NewClient(config.Client())
 	client.UserAgent = "tink-buildkite-stats/v1.0.0"
-	bk := &NetworkBuildkite{client, *org, *branch, cache}
+	bk := &NetworkBuildkite{client, *org, cache}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.DefaultLogger)
-	r.Mount("/", (&Routes{bk}).Routes())
+	r.Mount("/", (&Routes{bk, queries}).Routes())
 
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
@@ -78,6 +84,108 @@ func (m *MemcacheCache) Get(k string) ([]byte, error) {
 		res = item.Value
 	}
 	return res, err
+}
+
+func mustBuildQueries(queries []string) (res []Query) {
+	for _, q := range queries {
+		res = append(res, mustBuildQuery(q))
+	}
+	return
+}
+
+func mustBuildQuery(query string) Query {
+	var raw JSONQuery
+	if err := json.Unmarshal([]byte(query), &raw); err != nil {
+		log.Fatalln("unable to parse report:", err)
+	}
+
+	return Query{
+		Name:      raw.Name,
+		from:      mustParseQueryTimestamp(raw.From),
+		to:        mustParseQueryTimestamp(raw.To),
+		pipelines: regexp.MustCompile(raw.Pipelines),
+		branches:  regexp.MustCompile(raw.Branches),
+		group:     template.Must(template.New("group").Parse(raw.Group)),
+	}
+}
+
+type JSONQuery struct {
+	Name      string `json:"name"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Pipelines string `json:"pipelines"`
+	Branches  string `json:"branches"`
+	Group     string `json:"group"`
+}
+
+type Query struct {
+	Name      string
+	from      QueryTimestamp
+	to        QueryTimestamp
+	pipelines *regexp.Regexp
+	branches  *regexp.Regexp
+	group     *template.Template
+}
+
+func (q Query) Predicate(b Build) bool {
+	return q.pipelines.Match([]byte(b.Pipeline.Name)) && q.branches.Match([]byte(b.Branch))
+}
+
+func (q Query) Duration(b Build) time.Duration {
+	return q.to.Extract(b).Sub(q.from.Extract(b))
+}
+
+func (q Query) Group(b Build) string {
+	var buf bytes.Buffer
+	if err := q.group.Execute(&buf, b); err != nil {
+		log.Panicln("extract the build group:", err)
+	}
+	return string(buf.Bytes())
+}
+
+type QueryTimestamp int
+
+const (
+	CreatedTimestamp QueryTimestamp = iota
+	ScheduledTimestamp
+	StartedTimestamp
+	FinishedTimestamp
+)
+
+func mustParseQueryTimestamp(s string) QueryTimestamp {
+	switch s {
+	case "created":
+		return CreatedTimestamp
+	case "scheduled":
+		return ScheduledTimestamp
+	case "started":
+		return StartedTimestamp
+	case "finished":
+		return FinishedTimestamp
+	default:
+		log.Fatalln("unable to parse timestamp")
+	}
+
+	// will never happen
+	return 0
+}
+
+func (t QueryTimestamp) Extract(b Build) time.Time {
+	switch t {
+	case CreatedTimestamp:
+		return b.CreatedAt
+	case ScheduledTimestamp:
+		return b.ScheduledAt
+	case StartedTimestamp:
+		return b.StartedAt
+	case FinishedTimestamp:
+		return b.FinishedAt
+	default:
+		log.Panicln("unrecognized timestamp type:", t)
+	}
+
+	// will never happen
+	return time.Now()
 }
 
 func optionalFileExpansion(s string) string {

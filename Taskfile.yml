@@ -12,7 +12,8 @@ tasks:
     deps:
       - build
     cmds:
-      - ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --branch "$BRANCH" --buildkite-org "$BUILDKITE_ORGANIZATION" --memcache 127.0.0.1:11211
+      - |
+        ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --buildkite-org "$BUILDKITE_ORGANIZATION" --memcache 127.0.0.1:11211 --report='{"name": "Slow staging builds", "from": "started", "to": "finished", "pipelines": ".*", "branches": "^staging$", "group": "{{"{{"}}.Pipeline.Name{{"}}"}}"}'
 
   build:
     sources:

@@ -16,6 +16,7 @@ import (
 type Build struct {
 	ID          string
 	Pipeline    Pipeline
+	Branch      string
 	ScheduledAt time.Time
 	FinishedAt  time.Time
 	StartedAt   time.Time
@@ -29,10 +30,11 @@ type Pipeline struct {
 // Mapping to an internal struct will use a lot less memory.
 func newBuildFromBuildkite(b buildkite.Build) Build {
 	res := Build{
+		ID: *b.ID,
 		Pipeline: Pipeline{
 			Name: *b.Pipeline.Name,
 		},
-		ID: *b.ID,
+		Branch: *b.Branch,
 
 		// We can safely assumed that all timestamps are set in the input, as
 		// we have a requirement that all builds should be finished when
@@ -40,20 +42,22 @@ func newBuildFromBuildkite(b buildkite.Build) Build {
 		CreatedAt:   b.CreatedAt.Time,
 		StartedAt:   b.StartedAt.Time,
 		ScheduledAt: b.ScheduledAt.Time,
-
-		FinishedAt: b.FinishedAt.Time,
+		FinishedAt:  b.FinishedAt.Time,
 	}
 	return res
 }
 
 type Buildkite interface {
-	ListBuilds(from time.Time) ([]Build, error)
+	ListBuilds(from time.Time, p BuildPredicate) ([]Build, error)
+}
+
+type BuildPredicate interface {
+	Predicate(Build) bool
 }
 
 type NetworkBuildkite struct {
 	Client *buildkite.Client
 	Org    string
-	Branch string
 	Cache  Cache
 }
 
@@ -64,23 +68,26 @@ type Cache interface {
 
 const itemsPerPage = 100
 
-func (b *NetworkBuildkite) ListBuilds(from time.Time) ([]Build, error) {
+func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Build, error) {
 	to := time.Now()
 
 	var res []Build
 	for _, interval := range generateDailyIntervals(from, to) {
+		log.Printf("Querying %+v...\n", interval)
 		bs, err := b.listBuildsBetween(interval, cacheTTL(interval))
 		if err != nil {
 			return res, err
 		}
+		log.Println("...found", len(bs), "builds.")
 		for _, b := range bs {
-			if b.CreatedAt.After(from) && b.CreatedAt.Before(to) {
+			if b.CreatedAt.After(from) && b.CreatedAt.Before(to) && pred.Predicate(b) {
 				// Note that the daily intervals will be a superset of [to,
 				// from). This is to get the cached buckets static. This means
 				// that we need to do some filtering here.
 				res = append(res, b)
 			}
 		}
+		log.Println("So far collected", len(res), "builds.")
 	}
 
 	return res, nil
@@ -132,9 +139,6 @@ func (b *NetworkBuildkite) listBuildsBetween(interval timeInterval, cacheTTL tim
 
 		// This implies that all `Build`s will have FinishedAt set.
 		State: []string{"passed"},
-	}
-	if b.Branch != "" {
-		opts.Branch = b.Branch
 	}
 
 	var result []Build
