@@ -98,6 +98,8 @@ func cacheTTL(interval timeInterval) time.Duration {
 		// same time.
 		spread := time.Duration(rand.Intn(7*24)) * time.Hour
 		return 60*24*time.Hour + spread
+	} else if time.Now().Sub(interval.To) > 1*time.Hour {
+		return 2 * time.Hour
 	} else {
 		return 10 * time.Minute
 	}
