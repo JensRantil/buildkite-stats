@@ -131,13 +131,13 @@ func (d namedDurationSlice) Less(i, j int) bool { return d[i].Duration < d[j].Du
 func (d namedDurationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 
 func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request, q Query) {
-	fmt.Fprintf(w, `<h2>Total time spent building staging past 4 weeks</h2>`)
-
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
 	if err != nil {
-		// TODO: Return error.
+		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
 	}
+
+	fmt.Fprintf(w, `<h2>Total time spent building staging past 4 weeks</h2>`)
 
 	sums := make(map[string]time.Duration)
 	for _, b := range builds {
@@ -159,14 +159,14 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request, q Query) 
 }
 
 func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc int, q Query) {
-	fmt.Fprintf(w, `<h2>%dth percentile of time spent building staging past 4 weeks</h2>`, perc)
-	fperc := float64(perc) / 100
-
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
 	if err != nil {
-		// TODO: Return error.
+		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
 	}
+
+	fmt.Fprintf(w, `<h2>%dth percentile of time spent building staging past 4 weeks</h2>`, perc)
+	fperc := float64(perc) / 100
 
 	durationsByPipeline := make(map[string][]time.Duration)
 	for _, b := range builds {
@@ -206,18 +206,18 @@ func durationPercentile(a []time.Duration, perc float64) time.Duration {
 }
 
 func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode string, queryIndex int, q Query) {
+	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
+		return
+	}
+
 	fmt.Fprintf(w, `<h2>Build times over time</h2><p>...for builds with at least two builds.</p>`)
 
 	if chartMode == "rolling-average" {
 		fmt.Fprintf(w, `<p>Currently displaying the rolling average (15 builds). <a href="/%d/">Display all individual build times</a></p>`, queryIndex)
 	} else {
 		fmt.Fprintf(w, `<p>Currently displaying all builds individually. <a href="/%d/rolling-average">Display rolling average</a></p>`, queryIndex)
-	}
-
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
-	if err != nil {
-		// TODO: Return error.
-		return
 	}
 
 	activePipelines := make(map[string]int)
@@ -266,7 +266,7 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 
 	builds, err := wr.Buildkite.ListBuilds(fromTime(r), query)
 	if err != nil {
-		// TODO: Return error.
+		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
 	}
 
