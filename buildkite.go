@@ -74,6 +74,7 @@ type Cache interface {
 }
 
 const itemsPerPage = 100
+const intervalLength = time.Hour
 
 func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Build, error) {
 	// We are using a mutex here to avoid concurrent ListBuilds calls
@@ -90,7 +91,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 	concurrency := 30
 	sem := make(chan struct{}, concurrency)
 
-	intervals := generateIntervals(from, to, time.Hour)
+	intervals := generateIntervals(from, to, intervalLength)
 	parallelResults := make([][]Build, len(intervals))
 	for i, interval := range intervals {
 
