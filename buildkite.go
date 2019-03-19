@@ -121,7 +121,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			b, err := b.listBuildsBetween(loopinterval, cacheTTL(loopinterval))
+			b, err := b.listBuildsBetween(loopinterval, cacheTTL(from), false)
 			parallelResults[index] = b
 			log.Printf("%d/%d %+v", index, len(intervals), loopinterval)
 			return err
@@ -146,18 +146,14 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 	return res, err
 }
 
-func cacheTTL(interval timeInterval) time.Duration {
-	if time.Now().Sub(interval.To) > 12*time.Hour {
-		// Cache aggresively for older builds. We don't expect them to be
-		// modified. Use spread to not have to reload all builds at the
-		// same time.
-		spread := time.Duration(rand.Intn(20*24*60)) * time.Minute
-		return 60*24*time.Hour + spread
-	} else if time.Now().Sub(interval.To) > 1*time.Hour {
-		return 2 * time.Hour
-	} else {
-		return 10 * time.Minute
-	}
+func cacheTTL(from time.Time) time.Duration {
+	// Cache aggresively for older builds. We don't expect them to be modified.
+	// Use spread to not have to reload all builds at the same time.
+	spread := time.Duration(rand.Intn(20*24*60)) * time.Minute
+
+	// Somewhat of a hack since we don't have the scrape history duration
+	// (available in Serve) here.
+	return time.Now().Sub(from) + 24*time.Hour + spread
 }
 
 type timeInterval struct {
