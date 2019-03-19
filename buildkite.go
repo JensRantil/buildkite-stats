@@ -54,6 +54,9 @@ func newBuildFromBuildkite(b buildkite.Build) Build {
 }
 
 type Buildkite interface {
+	// TODO: Avoid returning a list of builds and instead take a callback
+	// (which calls back serially). That way, we don't need to read up all
+	// builds into memory, but can reduce the results quickly instead.
 	ListBuilds(from time.Time, p BuildPredicate) ([]Build, error)
 }
 
