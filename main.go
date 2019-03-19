@@ -28,6 +28,9 @@ var (
 	serveCmd      = kingpin.Command("serve", "serve the the web app.")
 	reports       = serveCmd.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in, 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
 	scrapeHistory = serveCmd.Flag("scrape-history", "How far back in time we scrape builds. Defaults to 28 days.").Default("672h").Duration()
+
+	refreshCmd     = kingpin.Command("refresh", "rewrite recent data to cache. recommended to do in background regularly if you have a lot of builds.")
+	refreshHistory = refreshCmd.Flag("refresh-history", "How far back in time we update the cache.").Default("3h").Duration()
 )
 
 func main() {
@@ -58,6 +61,8 @@ func main() {
 	switch cmd {
 	case "serve":
 		serve(bk, queries)
+	case "refresh":
+		refresh(bk)
 	}
 }
 
@@ -77,6 +82,15 @@ func serve(bk *NetworkBuildkite, queries []Query) {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
+}
+
+func refresh(bk *NetworkBuildkite) {
+	from := time.Now().Add(-*refreshHistory)
+	log.Printf("Starting refresh between [%s, now)\n", from)
+	if err := bk.RefreshCache(from); err != nil {
+		log.Fatalln(err)
+	}
+	log.Println("Refresh finished succesfully.")
 }
 
 type MemcacheCache struct {

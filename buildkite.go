@@ -58,6 +58,8 @@ type Buildkite interface {
 	// (which calls back serially). That way, we don't need to read up all
 	// builds into memory, but can reduce the results quickly instead.
 	ListBuilds(from time.Time, p BuildPredicate) ([]Build, error)
+
+	RefreshCache(from time.Time) error
 }
 
 type BuildPredicate interface {
@@ -74,6 +76,18 @@ type NetworkBuildkite struct {
 type Cache interface {
 	Put(k string, v []byte, ttl time.Duration) error
 	Get(k string) ([]byte, error)
+}
+
+func (b *NetworkBuildkite) RefreshCache(from time.Time) error {
+	to := time.Now()
+
+	intervals := generateIntervals(from, to, intervalLength)
+	for _, interval := range intervals {
+		if _, err := b.listBuildsBetween(interval, time.Duration(0), true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 const itemsPerPage = 100
@@ -163,11 +177,13 @@ func generateIntervals(from, to time.Time, chunks time.Duration) []timeInterval 
 	return res
 }
 
-func (b *NetworkBuildkite) listBuildsBetween(interval timeInterval, cacheTTL time.Duration) ([]Build, error) {
+func (b *NetworkBuildkite) listBuildsBetween(interval timeInterval, cacheTTL time.Duration, forceInvalidation bool) ([]Build, error) {
 	cacheKey := fmt.Sprintf("%d-%d", interval.From.Unix(), interval.To.Unix())
-	cached, err := b.readFromCache(cacheKey)
-	if err == nil {
-		return cached, err
+	if forceInvalidation {
+		cached, err := b.readFromCache(cacheKey)
+		if err == nil {
+			return cached, err
+		}
 	}
 
 	opts := &buildkite.BuildsListOptions{
