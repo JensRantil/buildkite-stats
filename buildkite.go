@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
@@ -60,6 +61,7 @@ type NetworkBuildkite struct {
 	Client *buildkite.Client
 	Org    string
 	Cache  Cache
+	mutex  sync.Mutex
 }
 
 type Cache interface {
@@ -70,6 +72,13 @@ type Cache interface {
 const itemsPerPage = 100
 
 func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Build, error) {
+	// We are using a mutex here to avoid concurrent ListBuilds calls
+	// populating the cache at the same time. Better to have all wait for one
+	// process to populate the cache. Will be faster and will not incur cost on
+	// the Buildkite rate limit.
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	to := time.Now()
 
 	var eg errgroup.Group
