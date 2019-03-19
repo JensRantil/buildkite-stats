@@ -86,7 +86,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 	concurrency := 30
 	sem := make(chan struct{}, concurrency)
 
-	intervals := generateDailyIntervals(from, to, time.Hour)
+	intervals := generateIntervals(from, to, time.Hour)
 	parallelResults := make([][]Build, len(intervals))
 	for i, interval := range intervals {
 
@@ -143,7 +143,7 @@ type timeInterval struct {
 	To   time.Time
 }
 
-func generateDailyIntervals(from, to time.Time, chunks time.Duration) []timeInterval {
+func generateIntervals(from, to time.Time, chunks time.Duration) []timeInterval {
 	start := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.Local)
 	end := start.Add(chunks)
 
