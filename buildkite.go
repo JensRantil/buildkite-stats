@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/go-buildkite/buildkite"
+	"golang.org/x/sync/errgroup"
 )
 
 type Build struct {
@@ -71,13 +72,36 @@ const itemsPerPage = 100
 func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Build, error) {
 	to := time.Now()
 
+	var eg errgroup.Group
+
+	concurrency := 30
+	sem := make(chan struct{}, concurrency)
+
+	intervals := generateDailyIntervals(from, to, time.Hour)
+	parallelResults := make([][]Build, len(intervals))
+	for i, interval := range intervals {
+
+		// See https://github.com/golang/go/wiki/CommonMistakes#using-goroutines-on-loop-iterator-variables
+		index := i
+		loopinterval := interval
+
+		eg.Go(func() error {
+			// Limit concurrency to be nice to Buildkite.
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			b, err := b.listBuildsBetween(loopinterval, cacheTTL(loopinterval))
+			parallelResults[index] = b
+			log.Printf("%d/%d %+v", index, len(intervals), loopinterval)
+			return err
+		})
+	}
+
+	err := eg.Wait()
+	log.Println("error:", err)
+
 	var res []Build
-	for _, interval := range generateDailyIntervals(from, to, time.Hour) {
-		log.Printf("Querying %+v...\n", interval)
-		bs, err := b.listBuildsBetween(interval, cacheTTL(interval))
-		if err != nil {
-			return res, err
-		}
+	for _, bs := range parallelResults {
 		for _, b := range bs {
 			if b.CreatedAt.After(from) && b.CreatedAt.Before(to) && pred.Predicate(b) {
 				// Note that the daily intervals will be a superset of [to,
@@ -88,7 +112,7 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 		}
 	}
 
-	return res, nil
+	return res, err
 }
 
 func cacheTTL(interval timeInterval) time.Duration {
