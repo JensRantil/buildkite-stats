@@ -132,7 +132,7 @@ type Query struct {
 }
 
 func (q Query) Predicate(b Build) bool {
-	return q.pipelines.Match([]byte(b.Pipeline.Name)) && q.branches.Match([]byte(b.Branch))
+	return q.pipelines.MatchString(b.Pipeline.Name) && q.branches.MatchString(b.Branch)
 }
 
 func (q Query) Duration(b Build) time.Duration {
