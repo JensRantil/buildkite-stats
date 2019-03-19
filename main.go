@@ -24,11 +24,13 @@ var (
 	org            = kingpin.Flag("buildkite-org", "Buildkite organization which is to be scraped.").Required().String()
 	port           = kingpin.Flag("port", "TCP port which the HTTP server should listen on.").Default("8080").Int()
 	memcachedAddrs = kingpin.Flag("memcache", "Memcache broker addresses (eg. 127.0.0.1:11211).").Strings()
-	reports        = kingpin.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in, 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
+
+	serveCmd      = kingpin.Command("serve", "serve the the web app.")
+	reports       = serveCmd.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in, 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
 )
 
 func main() {
-	kingpin.Parse()
+	cmd := kingpin.Parse()
 
 	//buildkite.SetHttpDebug(true) // Useful when debugging.
 	config, err := buildkite.NewTokenConfig(optionalFileExpansion(*apiToken), false)
@@ -52,6 +54,13 @@ func main() {
 		Cache:  cache,
 	}
 
+	switch cmd {
+	case "serve":
+		serve(bk, queries)
+	}
+}
+
+func serve(bk *NetworkBuildkite, queries []Query) {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
