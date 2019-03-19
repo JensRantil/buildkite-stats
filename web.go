@@ -19,8 +19,9 @@ import (
 )
 
 type Routes struct {
-	Buildkite Buildkite
-	Queries   []Query
+	Buildkite     Buildkite
+	Queries       []Query
+	ScrapeHistory time.Duration
 }
 
 func (wr *Routes) Routes() chi.Router {
@@ -131,7 +132,7 @@ func (d namedDurationSlice) Less(i, j int) bool { return d[i].Duration < d[j].Du
 func (d namedDurationSlice) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 
 func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request, q Query) {
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
+	builds, err := wr.Buildkite.ListBuilds(wr.fromTime(r), q)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
@@ -159,7 +160,7 @@ func (wr *Routes) totalTopList(w http.ResponseWriter, r *http.Request, q Query) 
 }
 
 func (wr *Routes) percentileTopList(w http.ResponseWriter, r *http.Request, perc int, q Query) {
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
+	builds, err := wr.Buildkite.ListBuilds(wr.fromTime(r), q)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
@@ -206,7 +207,7 @@ func durationPercentile(a []time.Duration, perc float64) time.Duration {
 }
 
 func (wr *Routes) printCharts(w http.ResponseWriter, r *http.Request, chartMode string, queryIndex int, q Query) {
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r), q)
+	builds, err := wr.Buildkite.ListBuilds(wr.fromTime(r), q)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
@@ -264,7 +265,7 @@ func (wr *Routes) charts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	builds, err := wr.Buildkite.ListBuilds(fromTime(r), query)
+	builds, err := wr.Buildkite.ListBuilds(wr.fromTime(r), query)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("unable to fetch builds: %s", err), 500)
 		return
@@ -382,6 +383,6 @@ func nilToString(s *string) string {
 	return *s
 }
 
-func fromTime(w *http.Request) time.Time {
-	return time.Now().Add(-24 * 28 * time.Hour)
+func (wr *Routes) fromTime(w *http.Request) time.Time {
+	return time.Now().Add(-wr.ScrapeHistory)
 }

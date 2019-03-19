@@ -27,6 +27,7 @@ var (
 
 	serveCmd      = kingpin.Command("serve", "serve the the web app.")
 	reports       = serveCmd.Flag("report", `Report. Example: {"name": "Slow master builds", "from": "started", "to": "finished", "pipelines": ".*", "branches: "master", "group": "{{.Pipeline}}"} where 1) 'from'/'to' must be created, scheduled, started or finished, 2) 'pipelines'/'branches' is a regexp of what we are interested in, 3) name can be anything human readable, 4) 'group' is how all builds are grouped (a Golang template from Build).`).Required().Strings()
+	scrapeHistory = serveCmd.Flag("scrape-history", "How far back in time we scrape builds. Defaults to 28 days.").Default("672h").Duration()
 )
 
 func main() {
@@ -65,7 +66,7 @@ func serve(bk *NetworkBuildkite, queries []Query) {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.DefaultLogger)
-	r.Mount("/", (&Routes{bk, queries}).Routes())
+	r.Mount("/", (&Routes{bk, queries, *scrapeHistory}).Routes())
 
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
