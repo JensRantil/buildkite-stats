@@ -43,10 +43,7 @@ func main() {
 		log.Fatal("Incorrect token:", err)
 	}
 
-	var cache Cache
-	if len(*memcachedAddrs) > 0 {
-		cache = &MemcacheCache{memcache.New(*memcachedAddrs...)}
-	}
+	cache := &MemcacheCache{memcache.New(*memcachedAddrs...)}
 
 	queries := mustBuildQueries(*reports)
 
