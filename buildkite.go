@@ -45,10 +45,6 @@ func newBuildFromBuildkite(b buildkite.Build) Build {
 		StartedAt:   b.StartedAt.Time,
 		ScheduledAt: b.ScheduledAt.Time,
 		FinishedAt:  b.FinishedAt.Time,
-
-		// Not available right now. See [1].
-		// [1] https://github.com/buildkite/go-buildkite/issues/39
-		//RunnableAt:  b.RunnabledAt.Time,
 	}
 	return res
 }
