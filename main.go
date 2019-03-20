@@ -74,6 +74,8 @@ func serve(bk *NetworkBuildkite, queries []Query) {
 	r.Mount("/", (&Routes{bk, queries, *scrapeHistory}).Routes())
 
 	go func() {
+		// pprof registers on default mux so starting it on a separate port.
+		// pprof is being imported an anonymous import in the web package.
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
