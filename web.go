@@ -29,7 +29,7 @@ func (wr *Routes) Routes() chi.Router {
 
 	r.Get("/", wr.root)
 	r.Get("/{query}/", wr.report)
-	r.Get("/{query}/rolling-average", wr.root)
+	r.Get("/{query}/rolling-average", wr.report)
 
 	r.Get("/{query}/charts/{pipeline}/{mode}", wr.charts)
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +70,8 @@ func (wr *Routes) report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chartMode := "all"
-	if r.RequestURI == "/rolling-average" {
+	log.Println(chi.RouteContext(r.Context()).RoutePattern())
+	if chi.RouteContext(r.Context()).RoutePattern() == "/{query}/rolling-average" {
 		chartMode = "rolling-average"
 	}
 
