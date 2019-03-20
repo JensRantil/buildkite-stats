@@ -174,7 +174,7 @@ func generateIntervals(from, to time.Time, chunks time.Duration) []timeInterval 
 
 func (b *NetworkBuildkite) listBuildsBetween(interval timeInterval, cacheTTL time.Duration, forceInvalidation bool) ([]Build, error) {
 	cacheKey := fmt.Sprintf("%d-%d", interval.From.Unix(), interval.To.Unix())
-	if forceInvalidation {
+	if !forceInvalidation {
 		cached, err := b.readFromCache(cacheKey)
 		if err == nil {
 			return cached, err
