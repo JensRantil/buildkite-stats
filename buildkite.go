@@ -123,7 +123,6 @@ func (b *NetworkBuildkite) ListBuilds(from time.Time, pred BuildPredicate) ([]Bu
 
 			b, err := b.listBuildsBetween(loopinterval, cacheTTL(from), false)
 			parallelResults[index] = b
-			log.Printf("%d/%d %+v", index, len(intervals), loopinterval)
 			return err
 		})
 	}
