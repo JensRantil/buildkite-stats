@@ -6,13 +6,21 @@ vars:
 tasks:
   default:
     cmds:
-      - task: run
+      - task: run-serve
 
-  run:
+  run-serve:
     deps:
       - build
     cmds:
-      - ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --branch "$BRANCH" --buildkite-org "$BUILDKITE_ORGANIZATION"
+      - |
+        ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --buildkite-org "$BUILDKITE_ORGANIZATION" --memcache 127.0.0.1:11211 serve --report='{"name": "Slow staging builds", "from": "started", "to": "finished", "pipelines": ".*", "branches": "^staging$", "group": "{{"{{"}}.Pipeline.Name{{"}}"}}"}'
+
+  run-refresh:
+    deps:
+      - build
+    cmds:
+      - |
+        ./{{.EXE}} --buildkite-token "$BUILDKITE_API_TOKEN" --buildkite-org "$BUILDKITE_ORGANIZATION" --memcache 127.0.0.1:11211 refresh
 
   build:
     sources:
